@@ -228,6 +228,27 @@ def apply_custom_css() -> None:
             gap: 8px;
             align-items: center;
         }}
+        .top-nav-card div[data-testid="column"] {{
+            min-width: 118px;
+        }}
+        .top-nav-card .stButton > button {{
+            width: 100%;
+            min-height: 38px;
+            border-radius: 12px;
+            padding: 8px 10px;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--ync-text);
+            background: rgba(255,255,255,0.72);
+            border: 1px solid rgba(177,18,38,0.12);
+            box-shadow: none;
+            white-space: nowrap;
+        }}
+        .top-nav-card .stButton > button:hover {{
+            color: var(--ync-red-dark);
+            background: rgba(177,18,38,0.06);
+            border-color: rgba(177,18,38,0.20);
+        }}
         .nav-button {{
             display: inline-flex;
             align-items: center;
@@ -1779,15 +1800,22 @@ def render_top_nav() -> str:
         ("detail", "▤", "明细结果"),
         ("export", "▣", "结果导出"),
     ]
-    current = st.query_params.get("page", "home")
+    raw_page = st.query_params.get("page", "home")
+    current = raw_page[0] if isinstance(raw_page, list) else raw_page
     valid_keys = {key for key, _, _ in nav_items}
     if current not in valid_keys:
         current = "home"
-    buttons = []
-    for key, icon, label in nav_items:
-        active = " active" if key == current else ""
-        buttons.append(f'<a class="nav-button{active}" href="?page={key}">{icon}&nbsp;{label}</a>')
-    st.markdown(f'<div class="top-nav-card"><div class="top-nav-grid">{"".join(buttons)}</div></div>', unsafe_allow_html=True)
+    with st.container(border=True):
+        nav_cols = st.columns(len(nav_items))
+        for col, (key, icon, label) in zip(nav_cols, nav_items):
+            button_label = f"{icon} {label}"
+            if key == current:
+                button_label = f"● {label}"
+            with col:
+                if st.button(button_label, key=f"nav_{key}", use_container_width=True):
+                    st.query_params["page"] = key
+                    current = key
+                    st.rerun()
     return current
 
 
