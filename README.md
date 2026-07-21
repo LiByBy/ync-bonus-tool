@@ -1,4 +1,3 @@
-[README.md](https://github.com/user-attachments/files/30213957/README.md)
 # YNC 奖金系数方案测算工具
 
 这是一个基于 Python + Streamlit + Pandas + OpenPyXL/XlsxWriter 的本地 Web 工具，用于 YNC 项目的奖金系数方案测算与对比分析。
