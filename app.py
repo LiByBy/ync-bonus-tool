@@ -18,8 +18,10 @@ YNC_COLORS = {
     "secondary": "#C87A83",
     "accent": "#D9A441",
     "contrast": "#50606F",
-    "positive": "#5E8C61",
-    "negative": "#B11226",
+    "increase": "#B11226",
+    "decrease": "#5E8C61",
+    "positive": "#B11226",
+    "negative": "#5E8C61",
     "background": "#F7F4F3",
     "surface": "rgba(255, 255, 255, 0.76)",
     "surface_strong": "rgba(255, 255, 255, 0.92)",
@@ -37,6 +39,25 @@ VALID_QUALIFICATIONS = ["理事级", "经营级", "基干级", "指导级", "担
 VALID_NEW_JOB_FAMILIES = ["M", "T", "S", "O", "G"]
 VALID_EMPLOYEE_TYPES = ["正式", "中方", "日方", "劳务"]
 FIXED_LINKAGE_EMPLOYEE_TYPES = ["中方", "日方"]
+BLANK_RATING_HALF_LINKAGE_EMPLOYEE_TYPES = ["正式", "劳务"]
+BLANK_RATING_FIXED_LINKAGE = 1.00
+BLANK_RATING_HALF_LINKAGE = 0.50
+SPECIAL_M4_COEFFICIENT_RULES = {
+    "综合职（销售）": {
+        "qualification": "基干级",
+        "option_a_family": "S",
+        "option_a_family_name": "营业职群",
+        "option_b_family": "S",
+        "option_b_grade": "S4",
+    },
+    "技术职": {
+        "qualification": "基干级",
+        "option_a_family": "T",
+        "option_a_family_name": "技术职群",
+        "option_b_family": "T",
+        "option_b_grade": "T4",
+    },
+}
 REQUIRED_COLUMNS = [
     "employee_id",
     "employee_name",
@@ -45,7 +66,6 @@ REQUIRED_COLUMNS = [
     "original_qualification",
     "new_job_family",
     "new_grade",
-    "rating",
     "bonus_base",
     "attendance_rate",
     "eligible",
@@ -84,8 +104,10 @@ SCENARIO_COLORS = {
     "现行方案": "#6B7280",
     "方案A": "#B11226",
     "方案B": "#C87A83",
-    "positive": "#5E8C61",
-    "negative": "#B11226",
+    "increase": "#B11226",
+    "decrease": "#5E8C61",
+    "positive": "#B11226",
+    "negative": "#5E8C61",
 }
 FAMILY_COLORS = {"M": "#7F0D1B", "T": "#B11226", "S": "#C87A83", "O": "#D9A441", "G": "#50606F"}
 RATING_COLORS = {
@@ -287,7 +309,7 @@ APP_COPY_JA = {
     "条为提醒": "件が確認事項",
     "方案系数设置": "係数設定",
     "奖金 = 奖金基数 × 公司整体奖金系数 × 评价联动系数 × 出勤率。调整参数后，点击“重新测算”刷新分析与导出结果。": "賞与額 = 賞与基礎額 × 会社全体賞与係数 × 評価連動係数 × 出勤率。パラメータ調整後、「再試算」をクリックして分析・出力結果を更新します。",
-    "规则补充：员工性质为“中方”或“日方”的人员，三套方案的评价联动系数均按 1.00 计算。": "ルール補足：社員区分が「出資者側派遣社員（中方）」または「出資者側派遣社員（日方）」の社員は、3制度案すべて評価連動係数を 1.00 として計算します。",
+    "规则补充：员工性质为“中方”或“日方”的人员，三套方案的评价联动系数均按 1.00 计算；评价结果为空时，正式和劳务人员按 0.50 计算，中方和日方人员按 1.00 计算。": "ルール補足：社員区分が「出資者側派遣社員（中方）」または「出資者側派遣社員（日方）」の社員は、3制度案すべて評価連動係数を 1.00 として計算します。評価結果が空欄の場合、現地正社員・労務工は 0.50、出資者側派遣社員（中方・日方）は 1.00 として計算します。",
     "重新测算": "再試算",
     "重置为模板系数": "テンプレート係数に戻す",
     "已重置为模板系数。": "テンプレート係数に戻しました。",
@@ -305,6 +327,8 @@ APP_COPY_JA = {
     "图表分析": "チャート分析",
     "用于快速判断成本变化、职群分布、绩效区分度与员工影响。": "コスト変動、職群別分布、評価メリハリ、個人別影響を素早く確認します。",
     "员工性质": "社員区分",
+    "刷新图表": "チャート更新",
+    "已刷新图表分析。": "チャート分析を更新しました。",
     "请至少选择一种员工性质用于图表展示。": "チャート表示用に少なくとも1つの社員区分を選択してください。",
     "评价结果分析": "評価結果分析",
     "用于观察评价结果整体分布，以及不同新职群、新等级内部的评价结构差异。": "評価結果の全体分布、および新職群・新等級別の評価構成差を確認します。",
@@ -817,8 +841,8 @@ def scenario_color_map() -> Dict[str, str]:
         before: SCENARIO_COLORS["现行方案"],
         option_a: SCENARIO_COLORS["方案A"],
         option_b: SCENARIO_COLORS["方案B"],
-        tr("增加"): SCENARIO_COLORS["positive"],
-        tr("减少"): SCENARIO_COLORS["negative"],
+        tr("增加"): SCENARIO_COLORS["increase"],
+        tr("减少"): SCENARIO_COLORS["decrease"],
     }
 
 
@@ -1008,9 +1032,9 @@ def display_table_cn(df: pd.DataFrame, height: int | None = None) -> None:
         if label in display_df.columns:
             styler = styler.map(
                 lambda value: (
-                    f"color: {YNC_COLORS['positive']}; background-color: rgba(94,140,97,0.08)"
+                    f"color: {YNC_COLORS['increase']}; background-color: rgba(177,18,38,0.07)"
                     if pd.notna(value) and value > 0
-                    else f"color: {YNC_COLORS['negative']}; background-color: rgba(177,18,38,0.07)"
+                    else f"color: {YNC_COLORS['decrease']}; background-color: rgba(94,140,97,0.08)"
                     if pd.notna(value) and value < 0
                     else "color: #6B7280"
                 ),
@@ -1078,6 +1102,22 @@ def chart_note(text: str) -> None:
 
 def chart_analysis(text: str) -> None:
     st.markdown(f'<div class="chart-analysis">{text}</div>', unsafe_allow_html=True)
+
+
+def employee_type_filter_summary(calc_df: pd.DataFrame, selected_employee_types: List[str]) -> str:
+    df = eligible_detail(calc_df)
+    if selected_employee_types:
+        df = df[df["employee_type"].isin(selected_employee_types)]
+    total = len(df)
+    counts = df["employee_type"].value_counts()
+    if get_language() == "ja":
+        parts = [
+            f"{VALUE_LABELS_JA['employee_type'].get(employee_type, employee_type)} {int(counts.get(employee_type, 0)):,}名"
+            for employee_type in selected_employee_types
+        ]
+        return f"試算対象者数 {total:,}名（{ '、'.join(parts) }）。"
+    parts = [f"{employee_type}{int(counts.get(employee_type, 0)):,}人" for employee_type in selected_employee_types]
+    return f"参与测算人数 {total:,} 人，其中{'，'.join(parts)}。"
 
 
 def total_cost_insight(calc_df: pd.DataFrame) -> str:
@@ -1530,7 +1570,7 @@ def create_employee_template() -> BytesIO:
             ["原能力资格", "按现行能力资格填写", "理事级、经营级、基干级、指导级、担当级", "是"],
             ["新职群", "用于方案 A 和方案 B 测算", "M、T、S、O、G", "是"],
             ["新等级", "用于方案 B 测算，需为实际单一等级", "如 M4、M5、T1、S3、O4、G6", "是"],
-            ["评价等级", "年度评价等级", "A、B+、B、C+、C、D、E", "是"],
+            ["评价等级", "年度评价等级；为空时按员工性质应用默认评价联动系数", "A、B+、B、C+、C、D、E；空值：正式/劳务=0.50，中方/日方=1.00", "否"],
             ["奖金基数", "奖金计算基数", "数字，大于等于 0", "是"],
             ["出勤率", "参与奖金计算的出勤比例", "数字或百分比，如 1、0.95、95%", "是"],
             ["是否参与测算", "是否参与测算", "Y、N", "是"],
@@ -1828,27 +1868,61 @@ def calculate_bonus(
     detail["before_company_bonus_coefficient"] = float(company_lookup.get("Before", 1.00))
     detail["option_a_company_bonus_coefficient"] = float(company_lookup.get("Option A", 1.00))
     detail["option_b_company_bonus_coefficient"] = float(company_lookup.get("Option B", 1.00))
+    detail["option_a_calc_job_family"] = detail["new_job_family"]
+    detail["option_b_calc_job_family"] = detail["new_job_family"]
+    detail["option_b_calc_grade"] = detail["new_grade"]
+    detail["coefficient_rule_note"] = ""
+
+    special_rule_employee = pd.Series(False, index=detail.index)
+    for original_family, rule in SPECIAL_M4_COEFFICIENT_RULES.items():
+        mask = (
+            detail["new_grade"].eq("M4")
+            & detail["original_job_family"].eq(original_family)
+            & detail["original_qualification"].eq(rule["qualification"])
+        )
+        special_rule_employee = special_rule_employee | mask
+        detail.loc[mask, "option_a_calc_job_family"] = rule["option_a_family"]
+        detail.loc[mask, "option_b_calc_job_family"] = rule["option_b_family"]
+        detail.loc[mask, "option_b_calc_grade"] = rule["option_b_grade"]
+        detail.loc[mask, "coefficient_rule_note"] = (
+            f"特殊规则：原职群为{original_family}、原能力资格为{rule['qualification']}且新等级为M4，"
+            f"方案A按{rule['option_a_family']} {rule['option_a_family_name']}评价联动系数计算，"
+            f"方案B按{rule['option_b_grade']}评价联动系数计算。"
+        )
 
     detail = detail.merge(
         before[["original_job_family", "original_qualification", "rating", "before_coefficient"]],
         on=["original_job_family", "original_qualification", "rating"],
         how="left",
     )
+    option_a_lookup = option_a.rename(columns={"new_job_family": "option_a_calc_job_family"})
     detail = detail.merge(
-        option_a[["new_job_family", "rating", "option_a_coefficient"]],
-        on=["new_job_family", "rating"],
+        option_a_lookup[["option_a_calc_job_family", "rating", "option_a_coefficient"]],
+        on=["option_a_calc_job_family", "rating"],
         how="left",
     )
+    option_b_lookup = option_b.rename(columns={"new_job_family": "option_b_calc_job_family", "new_grade": "option_b_calc_grade"})
     detail = detail.merge(
-        option_b[["new_job_family", "new_grade", "rating", "option_b_coefficient"]],
-        on=["new_job_family", "new_grade", "rating"],
+        option_b_lookup[["option_b_calc_job_family", "option_b_calc_grade", "rating", "option_b_coefficient"]],
+        on=["option_b_calc_job_family", "option_b_calc_grade", "rating"],
         how="left",
     )
-    fixed_linkage_employee = detail["employee_type"].isin(FIXED_LINKAGE_EMPLOYEE_TYPES)
+    fixed_linkage_employee = detail["employee_type"].isin(FIXED_LINKAGE_EMPLOYEE_TYPES) & ~special_rule_employee
     detail.loc[
         fixed_linkage_employee,
         ["before_coefficient", "option_a_coefficient", "option_b_coefficient"],
     ] = 1.00
+    blank_rating = detail["rating"].fillna("").astype(str).str.strip().eq("")
+    blank_half_linkage_employee = blank_rating & detail["employee_type"].isin(BLANK_RATING_HALF_LINKAGE_EMPLOYEE_TYPES)
+    blank_fixed_linkage_employee = blank_rating & detail["employee_type"].isin(FIXED_LINKAGE_EMPLOYEE_TYPES)
+    detail.loc[
+        blank_half_linkage_employee,
+        ["before_coefficient", "option_a_coefficient", "option_b_coefficient"],
+    ] = BLANK_RATING_HALF_LINKAGE
+    detail.loc[
+        blank_fixed_linkage_employee,
+        ["before_coefficient", "option_a_coefficient", "option_b_coefficient"],
+    ] = BLANK_RATING_FIXED_LINKAGE
 
     coeff_issues = add_coefficient_issues(detail)
     valid_for_calc = (
@@ -1876,6 +1950,13 @@ def calculate_bonus(
     detail["option_b_change_amount"] = detail["option_b_bonus"] - detail["before_bonus"]
     detail["option_a_change_pct"] = np.where(detail["before_bonus"].fillna(0).ne(0), detail["option_a_change_amount"] / detail["before_bonus"], np.nan)
     detail["option_b_change_pct"] = np.where(detail["before_bonus"].fillna(0).ne(0), detail["option_b_change_amount"] / detail["before_bonus"], np.nan)
+    has_rule_note = detail["coefficient_rule_note"].fillna("").ne("")
+    existing_remarks = detail["remarks"].fillna("").astype(str).str.strip()
+    detail.loc[has_rule_note, "remarks"] = np.where(
+        existing_remarks[has_rule_note].ne(""),
+        existing_remarks[has_rule_note] + "；" + detail.loc[has_rule_note, "coefficient_rule_note"],
+        detail.loc[has_rule_note, "coefficient_rule_note"],
+    )
     detail.loc[not_eligible, "structure_note"] = detail.loc[not_eligible, "structure_note"].replace("", "不参与测算")
     detail.loc[not_eligible, "structure_status"] = "不参与测算"
 
@@ -2183,7 +2264,20 @@ def render_rating_mix_chart(mix_df: pd.DataFrame, title: str, dimension_name: st
                 alt.Tooltip("rating_share:Q", title=tr("占比"), format=".1%"),
             ],
         )
-        st.altair_chart(chart_base(chart, title), use_container_width=True, key=key)
+        labels = alt.Chart(mix_df).transform_filter(
+            "datum.rating_share >= 0.08"
+        ).mark_text(
+            color="#FFFFFF",
+            fontSize=10,
+            fontWeight=500,
+        ).encode(
+            x=alt.X("group_label:N", sort=None),
+            y=alt.Y("rating_share:Q", stack="center"),
+            text=alt.Text("rating_share:Q", format=".0%"),
+            detail="rating:N",
+            order=alt.Order("rating_order:Q", sort="descending"),
+        )
+        st.altair_chart(chart_base(chart + labels, title), use_container_width=True, key=key)
         chart_analysis(rating_mix_insight(mix_df, dimension_name))
 
 
@@ -2233,7 +2327,20 @@ def render_grade_rating_mix_chart(mix_df: pd.DataFrame) -> None:
                 alt.Tooltip("rating_share:Q", title=tr("占比"), format=".1%"),
             ],
         )
-        st.altair_chart(chart_base(chart, f"按新等级的评价结果占比（{selected_label}）"), use_container_width=True, key="grade_rating_mix_chart_v2")
+        labels = alt.Chart(filtered).transform_filter(
+            "datum.rating_share >= 0.08"
+        ).mark_text(
+            color="#FFFFFF",
+            fontSize=10,
+            fontWeight=500,
+        ).encode(
+            x=alt.X("group_label:N", sort=None),
+            y=alt.Y("rating_share:Q", stack="center"),
+            text=alt.Text("rating_share:Q", format=".0%"),
+            detail="rating:N",
+            order=alt.Order("rating_order:Q", sort="descending"),
+        )
+        st.altair_chart(chart_base(chart + labels, f"按新等级的评价结果占比（{selected_label}）"), use_container_width=True, key="grade_rating_mix_chart_v2")
         chart_analysis(rating_mix_insight(filtered, "新等级"))
 
 
@@ -2265,14 +2372,24 @@ def render_new_family_chart(calc_df: pd.DataFrame) -> None:
         chart_note("该图展示不同新职群在各方案下的奖金成本分布。")
         order = scenario_display_order()
         colors = scenario_color_map()
-        chart = alt.Chart(data).mark_bar().encode(
+        bars = alt.Chart(data).mark_bar().encode(
             x=alt.X("新职群:N", title=tr("新职群"), axis=alt.Axis(labelAngle=0, labelLimit=118)),
             y=alt.Y("奖金总额:Q", title=tr("奖金总额"), axis=alt.Axis(format=",.0f")),
             xOffset="方案:N",
             color=alt.Color("方案:N", title=tr("方案"), scale=alt.Scale(domain=order, range=[colors[name] for name in order])),
             tooltip=[alt.Tooltip("新职群:N", title=tr("新职群")), alt.Tooltip("方案:N", title=tr("方案")), alt.Tooltip("奖金总额:Q", title=tr("奖金总额"), format=",.0f")],
         )
-        st.altair_chart(chart_base(chart, "按新职群的奖金成本对比"), use_container_width=True, key="new_family_chart_v3")
+        labels = alt.Chart(data).mark_text(
+            dy=-6,
+            color=YNC_COLORS["text"],
+            fontSize=10,
+        ).encode(
+            x=alt.X("新职群:N", axis=alt.Axis(labelAngle=0, labelLimit=118)),
+            y=alt.Y("奖金总额:Q"),
+            xOffset="方案:N",
+            text=alt.Text("奖金总额:Q", format=",.0f"),
+        )
+        st.altair_chart(chart_base(bars + labels, "按新职群的奖金成本对比"), use_container_width=True, key="new_family_chart_v3")
         chart_analysis(new_family_insight(calc_df))
 
 
@@ -2282,13 +2399,25 @@ def render_rating_average_chart(calc_df: pd.DataFrame) -> None:
         chart_note("该图用于观察高绩效与低绩效员工之间的激励差异是否被拉开。")
         order = scenario_display_order()
         colors = scenario_color_map()
-        chart = alt.Chart(data).mark_line(point=True, strokeWidth=2).encode(
+        line = alt.Chart(data).mark_line(point=True, strokeWidth=2).encode(
             x=alt.X("评价等级:N", title=tr("评价等级"), sort=VALID_RATINGS, axis=alt.Axis(labelAngle=0)),
             y=alt.Y("人均奖金:Q", title=tr("人均奖金"), axis=alt.Axis(format=",.0f")),
             color=alt.Color("方案:N", title=tr("方案"), scale=alt.Scale(domain=order, range=[colors[name] for name in order])),
             tooltip=[alt.Tooltip("评价等级:N", title=tr("评价等级")), alt.Tooltip("方案:N", title=tr("方案")), alt.Tooltip("人均奖金:Q", title=tr("人均奖金"), format=",.0f")],
         )
-        st.altair_chart(chart_base(chart, "按评价等级的人均奖金对比"), use_container_width=True, key="rating_average_chart_v3")
+        labels = alt.Chart(data).transform_filter(
+            "isValid(datum['人均奖金'])"
+        ).mark_text(
+            dy=-10,
+            fontSize=10,
+            color=YNC_COLORS["text"],
+        ).encode(
+            x=alt.X("评价等级:N", sort=VALID_RATINGS),
+            y=alt.Y("人均奖金:Q"),
+            text=alt.Text("人均奖金:Q", format=",.0f"),
+            color=alt.Color("方案:N", scale=alt.Scale(domain=order, range=[colors[name] for name in order]), legend=None),
+        )
+        st.altair_chart(chart_base(line + labels, "按评价等级的人均奖金对比"), use_container_width=True, key="rating_average_chart_v3")
         chart_analysis(rating_insight(calc_df))
 
 
@@ -2303,8 +2432,17 @@ def render_change_distribution_chart(calc_df: pd.DataFrame, scenario: str) -> No
             y=alt.Y("count():Q", title=tr("员工数量"), axis=alt.Axis(format=",.0f")),
             tooltip=[alt.Tooltip("方案:N", title=tr("方案")), alt.Tooltip("count():Q", title=tr("员工数量"), format=",.0f")],
         )
+        labels = alt.Chart(data).mark_text(
+            dy=-6,
+            color=YNC_COLORS["text"],
+            fontSize=10,
+        ).encode(
+            x=alt.X("变化额:Q", bin=alt.Bin(maxbins=24)),
+            y=alt.Y("count():Q"),
+            text=alt.Text("count():Q", format=",.0f"),
+        )
         safe_key = "option_a" if scenario == "方案A" else "option_b"
-        st.altair_chart(chart_base(chart, f"{scenario}较现行变化额分布"), use_container_width=True, key=f"change_distribution_{safe_key}_v3")
+        st.altair_chart(chart_base(chart + labels, f"{scenario}较现行变化额分布"), use_container_width=True, key=f"change_distribution_{safe_key}_v3")
         chart_analysis(distribution_insight(calc_df, scenario))
 
 
@@ -2315,11 +2453,21 @@ def render_top_impact_chart(calc_df: pd.DataFrame, scenario: str) -> None:
         chart = alt.Chart(data).mark_bar().encode(
             x=alt.X("变化额:Q", title=f"{tr(scenario)}{tr('较现行变化额')}", axis=alt.Axis(format=",.0f")),
             y=alt.Y("员工:N", title=tr("员工"), sort="-x"),
-            color=alt.Color("方向:N", scale=alt.Scale(domain=[tr("增加"), tr("减少")], range=[SCENARIO_COLORS["positive"], SCENARIO_COLORS["negative"]]), legend=None),
+            color=alt.Color("方向:N", scale=alt.Scale(domain=[tr("增加"), tr("减少")], range=[SCENARIO_COLORS["increase"], SCENARIO_COLORS["decrease"]]), legend=None),
             tooltip=[alt.Tooltip("员工:N", title=tr("员工")), alt.Tooltip("变化额:Q", title=tr("变化额"), format=",.0f"), alt.Tooltip("方向:N", title=tr("方向"))],
         )
+        labels = alt.Chart(data).mark_text(
+            align="left",
+            dx=4,
+            color=YNC_COLORS["text"],
+            fontSize=10,
+        ).encode(
+            x=alt.X("变化额:Q"),
+            y=alt.Y("员工:N", sort="-x"),
+            text=alt.Text("变化额:Q", format=",.0f"),
+        )
         safe_key = "option_a" if scenario == "方案A" else "option_b"
-        st.altair_chart(chart_base(chart, f"奖金变化影响最大的员工（{scenario}）"), use_container_width=True, key=f"top_impact_{safe_key}_v3")
+        st.altair_chart(chart_base(chart + labels, f"奖金变化影响最大的员工（{scenario}）"), use_container_width=True, key=f"top_impact_{safe_key}_v3")
         chart_analysis(top_impact_insight(calc_df, scenario))
 
 
@@ -2333,6 +2481,12 @@ def format_pct(value: float) -> str:
     if pd.isna(value):
         return "N/A"
     return f"{value:.1%}"
+
+
+def format_signed_pct(value: float) -> str:
+    if pd.isna(value):
+        return "N/A"
+    return f"{value:+.1%}"
 
 
 def style_display_df(df: pd.DataFrame) -> pd.io.formats.style.Styler:
@@ -2622,7 +2776,7 @@ def render_coefficients_tab() -> None:
     render_card(
         f"<h3>{tr('方案系数设置')}</h3>"
         f"<p>{tr('奖金 = 奖金基数 × 公司整体奖金系数 × 评价联动系数 × 出勤率。调整参数后，点击“重新测算”刷新分析与导出结果。')}</p>"
-        f"<p style='margin-top:8px;color:#6B7280;'>{tr('规则补充：员工性质为“中方”或“日方”的人员，三套方案的评价联动系数均按 1.00 计算。')}</p>"
+        f"<p style='margin-top:8px;color:#6B7280;'>{tr('规则补充：员工性质为“中方”或“日方”的人员，三套方案的评价联动系数均按 1.00 计算；评价结果为空时，正式和劳务人员按 0.50 计算，中方和日方人员按 1.00 计算。')}</p>"
     )
     top_cols = st.columns([1, 1, 4])
     with top_cols[0]:
@@ -2725,9 +2879,21 @@ def render_analysis_tab() -> None:
     with cols[3]:
         metric_card(tr("方案B总奖金"), format_money(option_b_total), icon="yen")
     with cols[4]:
-        metric_card(tr("方案A较现行"), format_pct(option_a_pct), icon="trend-up", delta=tr("变化率"), delta_color=YNC_COLORS["positive"] if option_a_pct >= 0 else YNC_COLORS["negative"])
+        metric_card(
+            tr("方案A较现行"),
+            format_signed_pct(option_a_pct),
+            icon="chart",
+            delta=tr("变化率"),
+            delta_color=YNC_COLORS["increase"] if option_a_pct >= 0 else YNC_COLORS["decrease"],
+        )
     with cols[5]:
-        metric_card(tr("方案B较现行"), format_pct(option_b_pct), icon="trend-down", delta=tr("变化率"), delta_color=YNC_COLORS["positive"] if option_b_pct >= 0 else YNC_COLORS["negative"])
+        metric_card(
+            tr("方案B较现行"),
+            format_signed_pct(option_b_pct),
+            icon="chart",
+            delta=tr("变化率"),
+            delta_color=YNC_COLORS["increase"] if option_b_pct >= 0 else YNC_COLORS["decrease"],
+        )
     with cols[6]:
         metric_card(tr("异常数量"), f"{len(results['issues']):,}", icon="alert")
 
@@ -2736,13 +2902,21 @@ def render_analysis_tab() -> None:
         st.markdown(f'<div class="section-title">{tr("图表分析")}</div><div class="section-subtitle">{tr("用于快速判断成本变化、职群分布、绩效区分度与员工影响。")}</div>', unsafe_allow_html=True)
     available_employee_types = VALID_EMPLOYEE_TYPES
     with chart_header_cols[1]:
-        selected_employee_types = st.multiselect(
-            tr("员工性质"),
-            options=available_employee_types,
-            default=available_employee_types,
-            format_func=tr,
-            key="analysis_employee_type_filter_v2",
-        )
+        filter_cols = st.columns([4, 1.35], vertical_alignment="bottom")
+        with filter_cols[0]:
+            selected_employee_types = st.multiselect(
+                tr("员工性质"),
+                options=available_employee_types,
+                default=available_employee_types,
+                format_func=tr,
+                key="analysis_employee_type_filter_v2",
+            )
+        with filter_cols[1]:
+            if st.button(tr("刷新图表"), use_container_width=True):
+                refresh_results()
+                st.success(tr("已刷新图表分析。"))
+                st.rerun()
+        st.caption(employee_type_filter_summary(calc_df, selected_employee_types))
 
     if not selected_employee_types:
         st.warning(tr("请至少选择一种员工性质用于图表展示。"))
