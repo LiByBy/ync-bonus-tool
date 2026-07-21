@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from hmac import compare_digest
 from io import BytesIO
 from pathlib import Path
 from typing import Dict, List, Tuple
@@ -314,7 +315,16 @@ APP_COPY_JA = {
     "重置为模板系数": "テンプレート係数に戻す",
     "已重置为模板系数。": "テンプレート係数に戻しました。",
     "已按当前系数重新测算。": "現在の係数で再試算しました。",
+    "登录": "ログイン",
+    "用户名": "ユーザー名",
+    "密码": "パスワード",
+    "进入工具": "ツールに入る",
+    "登录成功。": "ログインしました。",
+    "用户名或密码不正确。": "ユーザー名またはパスワードが正しくありません。",
+    "登录配置未完成，请先在 Streamlit Secrets 中配置用户名和密码。": "ログイン設定が未完了です。Streamlit Secrets にユーザー名とパスワードを設定してください。",
+    "请输入用户名和密码后进入测算工具。": "ユーザー名とパスワードを入力して試算ツールに入ってください。",
     "公司整体奖金系数设置": "会社全体賞与係数設定",
+    "现行方案评价联动系数设置": "現行制度 評価連動係数設定",
     "方案A评价联动系数设置": "案A 評価連動係数設定",
     "方案B评价联动系数设置": "案B 評価連動係数設定",
     "参与人数": "対象人数",
@@ -812,6 +822,52 @@ def apply_custom_css() -> None:
 
 def render_card(html: str) -> None:
     st.markdown(f'<div class="glass-card">{html}</div>', unsafe_allow_html=True)
+
+
+def get_auth_credentials() -> Tuple[str, str]:
+    try:
+        auth_config = st.secrets.get("auth", {})
+    except Exception:
+        auth_config = {}
+    return str(auth_config.get("username", "")), str(auth_config.get("password", ""))
+
+
+def ensure_authenticated() -> bool:
+    if st.session_state.get("authenticated", False):
+        return True
+
+    username, password = get_auth_credentials()
+    st.markdown(
+        f"""
+        <div class="brand-bar">
+            <div>
+                <div class="brand-title">{tr("YNC 奖金系数方案测算工具")}</div>
+                <div class="brand-subtitle">Bonus Coefficient Scenario Analyzer</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    if not username or not password:
+        render_card(f"<h3>{tr('登录')}</h3><p>{tr('登录配置未完成，请先在 Streamlit Secrets 中配置用户名和密码。')}</p>")
+        return False
+
+    with st.form("login_form"):
+        render_card(f"<h3>{tr('登录')}</h3><p>{tr('请输入用户名和密码后进入测算工具。')}</p>")
+        input_username = st.text_input(tr("用户名"))
+        input_password = st.text_input(tr("密码"), type="password")
+        submitted = st.form_submit_button(tr("进入工具"), use_container_width=True)
+
+    if submitted:
+        valid_username = compare_digest(input_username, username)
+        valid_password = compare_digest(input_password, password)
+        if valid_username and valid_password:
+            st.session_state.authenticated = True
+            st.success(tr("登录成功。"))
+            st.rerun()
+        else:
+            st.error(tr("用户名或密码不正确。"))
+    return False
 
 
 def get_language() -> str:
@@ -1370,22 +1426,54 @@ def rating_coefficients(base: float) -> Dict[str, float]:
 
 
 def get_default_before_coefficients() -> pd.DataFrame:
-    family_base = {"综合职（非销售）": 1.00, "综合职（销售）": 1.04, "现场职": 0.92, "技术职": 1.08}
-    qualification_factor = {"理事级": 1.35, "经营级": 1.22, "基干级": 1.10, "指导级": 0.95, "担当级": 0.82}
+    before_matrix = {
+        ("综合职（非销售）", "理事级"): {"A": 2.40, "B+": 2.00, "B": 1.60, "C+": 1.00, "C": 0.20, "D": 0.10, "E": 0.00},
+        ("综合职（非销售）", "经营级"): {"A": 2.30, "B+": 1.90, "B": 1.50, "C+": 1.00, "C": 0.50, "D": 0.10, "E": 0.00},
+        ("综合职（非销售）", "基干级"): {"A": 1.75, "B+": 1.50, "B": 1.25, "C+": 1.00, "C": 0.70, "D": 0.35, "E": 0.00},
+        ("综合职（非销售）", "指导级"): {"A": 1.60, "B+": 1.40, "B": 1.20, "C+": 1.00, "C": 0.80, "D": 0.40, "E": 0.00},
+        ("综合职（非销售）", "担当级"): {"A": 1.45, "B+": 1.30, "B": 1.15, "C+": 1.00, "C": 0.85, "D": 0.50, "E": 0.00},
+        ("综合职（销售）", "基干级"): {"A": 1.90, "B+": 1.70, "B": 1.40, "C+": 1.20, "C": 0.30, "D": 0.15, "E": 0.00},
+        ("综合职（销售）", "指导级"): {"A": 1.80, "B+": 1.60, "B": 1.30, "C+": 1.15, "C": 0.40, "D": 0.20, "E": 0.00},
+        ("综合职（销售）", "担当级"): {"A": 1.70, "B+": 1.50, "B": 1.20, "C+": 1.10, "C": 0.50, "D": 0.25, "E": 0.00},
+        ("现场职", "理事级"): {"A": 2.40, "B+": 2.00, "B": 1.60, "C+": 1.00, "C": 0.20, "D": 0.10, "E": 0.00},
+        ("现场职", "经营级"): {"A": 2.30, "B+": 1.90, "B": 1.50, "C+": 1.00, "C": 0.50, "D": 0.10, "E": 0.00},
+        ("现场职", "基干级"): {"A": 1.75, "B+": 1.50, "B": 1.25, "C+": 1.00, "C": 0.70, "D": 0.35, "E": 0.00},
+        ("现场职", "指导级"): {"A": 1.60, "B+": 1.40, "B": 1.20, "C+": 1.00, "C": 0.80, "D": 0.40, "E": 0.00},
+        ("现场职", "担当级"): {"A": 1.45, "B+": 1.30, "B": 1.15, "C+": 1.00, "C": 0.85, "D": 0.50, "E": 0.00},
+        ("技术职", "理事级"): {"A": 2.40, "B+": 2.00, "B": 1.60, "C+": 1.00, "C": 0.20, "D": 0.10, "E": 0.00},
+        ("技术职", "经营级"): {"A": 2.30, "B+": 1.90, "B": 1.50, "C+": 1.00, "C": 0.50, "D": 0.10, "E": 0.00},
+        ("技术职", "基干级"): {"A": 2.00, "B+": 1.70, "B": 1.40, "C+": 1.00, "C": 0.50, "D": 0.25, "E": 0.00},
+        ("技术职", "指导级"): {"A": 1.80, "B+": 1.50, "B": 1.30, "C+": 1.00, "C": 0.70, "D": 0.25, "E": 0.00},
+        ("技术职", "担当级"): {"A": 1.50, "B+": 1.30, "B": 1.15, "C+": 1.00, "C": 0.85, "D": 0.50, "E": 0.00},
+    }
     rows = []
-    for family, family_value in family_base.items():
-        for qualification, qualification_value in qualification_factor.items():
-            for rating, coefficient in rating_coefficients(family_value * qualification_value).items():
-                rows.append(
-                    {
-                        "scenario": "Before",
-                        "original_job_family": family,
-                        "original_qualification": qualification,
-                        "rating": rating,
-                        "coefficient": coefficient,
-                    }
-                )
+    for (family, qualification), coefficients in before_matrix.items():
+        for rating, coefficient in coefficients.items():
+            rows.append(
+                {
+                    "scenario": "Before",
+                    "original_job_family": family,
+                    "original_qualification": qualification,
+                    "rating": rating,
+                    "coefficient": coefficient,
+                }
+            )
     return pd.DataFrame(rows)
+
+
+def before_long_to_matrix(df: pd.DataFrame) -> pd.DataFrame:
+    matrix = df.pivot_table(
+        index=["original_job_family", "original_qualification"],
+        columns="rating",
+        values="coefficient",
+        aggfunc="first",
+    ).reset_index()
+    family_order = {family: idx for idx, family in enumerate(VALID_JOB_FAMILIES)}
+    qualification_order = {qualification: idx for idx, qualification in enumerate(VALID_QUALIFICATIONS)}
+    matrix["_family_order"] = matrix["original_job_family"].map(family_order)
+    matrix["_qualification_order"] = matrix["original_qualification"].map(qualification_order)
+    matrix = matrix.sort_values(["_family_order", "_qualification_order"]).drop(columns=["_family_order", "_qualification_order"])
+    return matrix[["original_job_family", "original_qualification"] + VALID_RATINGS]
 
 
 def get_default_option_a_coefficients() -> pd.DataFrame:
@@ -2794,6 +2882,13 @@ def render_coefficients_tab() -> None:
             st.success(tr("已重置为模板系数。"))
             st.rerun()
 
+    st.subheader(tr("现行方案评价联动系数设置"))
+    st.dataframe(
+        rename_columns_cn(before_long_to_matrix(get_default_before_coefficients())),
+        use_container_width=True,
+        hide_index=True,
+    )
+
     st.subheader(tr("公司整体奖金系数设置"))
     edited_company = st.data_editor(
         rename_columns_cn(st.session_state.company_bonus_coefficients),
@@ -3054,6 +3149,8 @@ def render_top_nav() -> str:
 
 def main() -> None:
     apply_custom_css()
+    if not ensure_authenticated():
+        return
     initialize_state()
     render_brand_bar()
     render_language_switch()
